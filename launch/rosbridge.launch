@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+    <rosparam command="load" file="$(find swiftrobotm_rosbridge)/config/default.yaml" />
+
+    <node name="swiftrobotm_rosbridge" pkg="swiftrobotm_rosbridge" type="swiftrobotm_rosbridge_node" output="screen"/>
+
+</launch>
