@@ -57,8 +57,39 @@ void Rosbridge::deviceStatusUpdate(internal_msg::UpdateMsg msg) {
     ROS_INFO("Device %d is now %s", msg.deviceID, status.c_str());
 }   
 
-int main(int argc, char **argv)
-{
+//provide subscribe for every possible message type
+void Rosbridge::createSwiftSubscriberImage(int channel) {
+    swiftrobot_client.subscribe<sensor_msg::Image>(channel, [=](sensor_msg::Image input) {
+        image_transport::Publisher pub = image_publisher[channel];
+        std::string encoding(input.pixelFormat, 4);
+        if (encoding == "mono") {
+            return;
+        } else {
+            // color image
+            // create cvMat image
+            cv::Mat bgr;
+            // image conversion
+            int offset = 0x80;
+            if (encoding == "420v" || encoding == "420f") {
+                // ros does not support YCbCr420, so we need to convert it
+                int cbcr_offset = input.width * input.height + offset + 4 * input.width;
+                cv::Mat y = cv::Mat(input.height , input.width, CV_8UC1, input.pixelArray.data.data() + offset);
+                cv::Mat cbcr = cv::Mat(input.height/2 , input.width/2, CV_8UC2, input.pixelArray.data.data() + cbcr_offset);
+                cv::cvtColorTwoPlane(y, cbcr, bgr, cv::COLOR_YUV2BGR_NV12);
+            } else if (encoding == "bgra") {
+                cv::Mat bgra = cv::Mat(input.height , input.width, CV_8UC4, input.pixelArray.data.data() + offset);
+                cv::cvtColor(bgra, bgr, cv::COLOR_BGRA2BGR);
+            } else {
+                return;
+            }
+            sensor_msgs::ImagePtr output = cv_bridge::CvImage(std_msgs::Header(), "bgr8", bgr).toImageMsg();
+            pub.publish(output);
+        }
+    });
+}
+
+
+int main(int argc, char **argv) {
     ros::init(argc, argv, "swiftrobotm_rosbridge_node");
     ros::NodeHandle nh;
 
@@ -67,26 +98,4 @@ int main(int argc, char **argv)
     ros::spin();
 
     return 0;
-}
-
-//provide subscribe for every possible message type
-void Rosbridge::createSwiftSubscriberImage(int channel) {
-    swiftrobot_client.subscribe<sensor_msg::Image>(channel, [=](sensor_msg::Image input){
-        image_transport::Publisher pub = image_publisher[channel];
-        // create cvMat image
-        cv::Mat bgr;
-        // image conversion
-        std::string encoding(input.pixelFormat, 4);
-        if (encoding == "420v" || encoding == "420f") {
-            // ros does not support YCbCr420, so we need to convert it
-            int offset = 0x80;
-            int cb_offset = input.width * input.height + offset;
-            int cr_offset = cb_offset + input.width/2 + input.height/2;
-            cv::Mat y = cv::Mat(input.height , input.width, CV_8UC1, input.pixelArray.data.data() + offset);
-            cv::Mat cbcr = cv::Mat(input.height/2 , input.width/2, CV_8UC2, input.pixelArray.data.data() + cb_offset);
-            cv::cvtColorTwoPlane(y, cbcr, bgr, cv::COLOR_YUV2BGR_NV12);
-        }
-        sensor_msgs::ImagePtr output = cv_bridge::CvImage(std_msgs::Header(), "bgr8", bgr).toImageMsg();
-        pub.publish(output);
-    });
 }
