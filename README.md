@@ -1,6 +1,6 @@
 # swiftrobotm Rosbridge
 
-This package is a ros bridge for the swiftrobotm middleware. It uses the swiftrobotc client library to communicate with iOS devices via WiFi or USB. This package is still work in progress
+This package is a ros bridge for the [swiftrobotm](https://github.com/danielriege/swiftrobotm) middleware. It uses the [swiftrobotc](https://github.com/danielriege/swiftrobotc) client library to communicate with iOS devices via WiFi or USB. This package is still work in progress
 
 ## supported message types
 
