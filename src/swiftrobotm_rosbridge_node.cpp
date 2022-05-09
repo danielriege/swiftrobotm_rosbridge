@@ -14,6 +14,7 @@ Rosbridge::Rosbridge(ros::NodeHandle &nh): nh_(nh), it_(nh), swiftrobot_client(S
 // for every ros type create a new entry
 ros_type_t Rosbridge::resolveRosType(std::string ros_type_str) {
     if (ros_type_str == "sensor_msgs/Image") return IMAGE;
+    if (ros_type_str == "sensor_msgs/Imu") return IMU;
     return INVALID;
 }
 
@@ -35,6 +36,10 @@ void Rosbridge::parseInputBindings() {
             image_publisher[swift_channel] = it_pub;
             createSwiftSubscriberImage(swift_channel);
             continue;
+            break; }
+        case IMU: {
+            tmp_pub = nh_.advertise<sensor_msgs::Imu>(ros_topic, 1);
+            createSwiftSubscriberIMU(swift_channel);
             break; }
         default:{
         // INVALID
@@ -63,21 +68,22 @@ void Rosbridge::createSwiftSubscriberImage(int channel) {
         image_transport::Publisher pub = image_publisher[channel];
         std::string encoding(input.pixelFormat, 4);
         if (encoding == "mono") {
-            return;
+            cv::Mat mono = cv::Mat(input.height , input.width, CV_8UC1, input.pixelArray.data.data());
+            sensor_msgs::ImagePtr output = cv_bridge::CvImage(std_msgs::Header(), "mono8", mono).toImageMsg();
+            pub.publish(output);
         } else {
             // color image
             // create cvMat image
             cv::Mat bgr;
             // image conversion
-            int offset = 0x80;
             if (encoding == "420v" || encoding == "420f") {
                 // ros does not support YCbCr420, so we need to convert it
-                int cbcr_offset = input.width * input.height + offset + 4 * input.width;
-                cv::Mat y = cv::Mat(input.height , input.width, CV_8UC1, input.pixelArray.data.data() + offset);
+                int cbcr_offset = input.width * input.height ; //+ 4 * input.width;
+                cv::Mat y = cv::Mat(input.height , input.width, CV_8UC1, input.pixelArray.data.data());
                 cv::Mat cbcr = cv::Mat(input.height/2 , input.width/2, CV_8UC2, input.pixelArray.data.data() + cbcr_offset);
                 cv::cvtColorTwoPlane(y, cbcr, bgr, cv::COLOR_YUV2BGR_NV12);
-            } else if (encoding == "bgra") {
-                cv::Mat bgra = cv::Mat(input.height , input.width, CV_8UC4, input.pixelArray.data.data() + offset);
+            } else if (encoding == "BGRA") {
+                cv::Mat bgra = cv::Mat(input.height , input.width, CV_8UC4, input.pixelArray.data.data());
                 cv::cvtColor(bgra, bgr, cv::COLOR_BGRA2BGR);
             } else {
                 return;
@@ -85,6 +91,25 @@ void Rosbridge::createSwiftSubscriberImage(int channel) {
             sensor_msgs::ImagePtr output = cv_bridge::CvImage(std_msgs::Header(), "bgr8", bgr).toImageMsg();
             pub.publish(output);
         }
+    });
+}
+
+void Rosbridge::createSwiftSubscriberIMU(int channel) {
+    swiftrobot_client.subscribe<sensor_msg::IMU>(channel, [=](sensor_msg::IMU input) {
+        ros::Publisher pub = ros_publisher[channel];
+        sensor_msgs::Imu output;
+        output.header.stamp = ros::Time::now();
+        output.header.frame_id = "imu";
+        output.orientation.x = input.orientationX;
+        output.orientation.y = input.orientationY;
+        output.orientation.z = input.orientationZ;
+        output.angular_velocity.x = input.angularVelocityX;
+        output.angular_velocity.y = input.angularVelocityY;
+        output.angular_velocity.z = input.angularVelocityZ;
+        output.linear_acceleration.x = input.linearAccelerationX;
+        output.linear_acceleration.y = input.linearAccelerationY;
+        output.linear_acceleration.z = input.linearAccelerationZ;
+        pub.publish(output);
     });
 }
 

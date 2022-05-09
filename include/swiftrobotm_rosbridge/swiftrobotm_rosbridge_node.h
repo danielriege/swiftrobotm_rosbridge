@@ -9,13 +9,15 @@
 #include <string>
 #include <opencv2/opencv.hpp>
 #include <cv_bridge/cv_bridge.h>
+#include "sensor_msgs/Imu.h"
 
 #define SWIFTROBOT_PORT 2345
 
 // add ros type for every swiftrobotm message
 typedef enum ros_type {
     INVALID,
-    IMAGE
+    IMAGE,
+    IMU
 } ros_type_t;
 
 class Rosbridge {
@@ -30,6 +32,7 @@ private:
     void deviceStatusUpdate(internal_msg::UpdateMsg msg);
     // subscriber
     void createSwiftSubscriberImage(int channel);
+    void createSwiftSubscriberIMU(int channel);
 private:
     SwiftRobotClient swiftrobot_client;
 

@@ -5,6 +5,9 @@ input:
   - ros_topic: /ultrawideangle_camera/image_raw
     ros_type: sensor_msgs/Image
     swift_channel: 1
+  - ros_topic: /imu
+    ros_type: sensor_msgs/Imu
+    swift_channel: 2
 
   
 # from ros to swiftrobotm
