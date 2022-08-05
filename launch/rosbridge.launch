@@ -4,6 +4,6 @@
 
     <node name="swiftrobotm_rosbridge" pkg="swiftrobotm_rosbridge" type="swiftrobotm_rosbridge_node" output="screen"/>
 
-    <node name="rqt_gui" pkg="rqt_gui" type="rqt_gui"/>
+    <!--node name="rqt_gui" pkg="rqt_gui" type="rqt_gui"/-->
 
 </launch>

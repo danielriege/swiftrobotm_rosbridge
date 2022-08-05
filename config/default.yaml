@@ -1,13 +1,20 @@
-#ip_address: "192.168.178.59" # if set, rosbridge will use WiFi insted of USB
+ip_address: "192.168.178.59" # if set, rosbridge will use WiFi insted of USB
 
 #from swiftrobotm to ros
-input:
-  - ros_topic: /ultrawideangle_camera/image_raw
-    ros_type: sensor_msgs/Image
-    swift_channel: 1
-  - ros_topic: /imu
-    ros_type: sensor_msgs/Imu
-    swift_channel: 2
+# inputs:
+# - ros_topic: /ultrawideangle_camera/image_raw
+#   ros_type: sensor_msgs/Image
+#   swift_channel: 6
+#  - ros_topic: /imu
+#    ros_type: sensor_msgs/Imu
+#    swift_channel: 2
 
   
 # from ros to swiftrobotm
+outputs:
+  - ros_topic: /laneDetection/segmented_debug_all
+    ros_type: sensor_msgs/Image
+    swift_channel: 2
+  - ros_topic: /odometry
+    ros_type: nav_msgs/Odometry
+    swift_channel: 3

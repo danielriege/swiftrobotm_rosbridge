@@ -1,21 +1,61 @@
 #include "swiftrobotm_rosbridge/swiftrobotm_rosbridge_node.h"
 
-Rosbridge::Rosbridge(ros::NodeHandle &nh): nh_(nh), it_(nh), swiftrobot_client(SWIFTROBOT_PORT) {
-    nh_.getParam("/input", inputs);
-    nh_.getParam("/output", outputs);
+// for USB
+Rosbridge::Rosbridge(ros::NodeHandle &nh, uint16_t port): nh_(nh), it_(nh), swiftrobot_client(port), test("test") {
+    initializeBridge();
+}
+
+Rosbridge::Rosbridge(ros::NodeHandle &nh, std::string device_ip, uint16_t port): nh_(nh), it_(nh), swiftrobot_client(device_ip, port), test("test") {
+    initializeBridge();
+}
+
+void Rosbridge::initializeBridge() {
 
     // to get information abount connected devices
     swiftrobot_client.subscribe<internal_msg::UpdateMsg>(0, std::bind(&Rosbridge::deviceStatusUpdate, this, std::placeholders::_1));
     swiftrobot_client.start();
 
-    parseInputBindings();
+    if (nh_.hasParam("/outputs")) {
+        nh_.getParam("/outputs", outputs);
+        parseOutputBindings();
+    }
+    if (nh_.hasParam("/inputs")) {
+        nh_.getParam("/inputs", inputs);
+        parseInputBindings();
+    }
 }
 
 // for every ros type create a new entry
 ros_type_t Rosbridge::resolveRosType(std::string ros_type_str) {
     if (ros_type_str == "sensor_msgs/Image") return IMAGE;
     if (ros_type_str == "sensor_msgs/Imu") return IMU;
+    if (ros_type_str == "nav_msgs/Odometry") return ODOMETRY;
     return INVALID;
+}
+
+void Rosbridge::parseOutputBindings() {
+    ROS_ASSERT(outputs.getType() == XmlRpc::XmlRpcValue::TypeArray);
+    for (int i = 0; i < outputs.size(); i++) { 
+        XmlRpc::XmlRpcValue binding = outputs[i];
+        ROS_ASSERT(binding.getType() == XmlRpc::XmlRpcValue::TypeStruct);
+
+        std::string ros_topic = binding["ros_topic"];
+        int swift_channel = binding["swift_channel"];
+        ros_type_t ros_type = resolveRosType(binding["ros_type"]);
+        switch (ros_type) {
+        case IMAGE: {
+            createRosSubscriberImage(ros_topic, swift_channel);
+            break;}
+        case IMU: {
+            break;}
+        case ODOMETRY: {
+            createRosSubscriberOdometry(ros_topic, swift_channel);
+            break;}
+        default: {
+            continue;
+            break; }
+        }
+    }
 }
 
 void Rosbridge::parseInputBindings() {
@@ -113,13 +153,62 @@ void Rosbridge::createSwiftSubscriberIMU(int channel) {
     });
 }
 
+// ROS subscriber
+
+void Rosbridge::createRosSubscriberImage(std::string topic, int channel) {
+    static image_transport::Subscriber sub = it_.subscribe(topic, 1, [=](const sensor_msgs::ImageConstPtr& msg) {
+
+        std::vector<uint8_t> pixelData = msg->data;
+        sensor_msg::Image image_msg;
+        image_msg.width = msg->width;
+        image_msg.height = msg->height;
+        char format[] = "BGRA";
+        memcpy(image_msg.pixelFormat, format, 4);
+        base_msg::UInt8Array pixelArrayMsg;
+        pixelArrayMsg.data = pixelData;
+        pixelArrayMsg.size = msg->step*msg->height;
+        image_msg.pixelArray = pixelArrayMsg;
+        
+        swiftrobot_client.publish<sensor_msg::Image>(channel, image_msg);
+    });
+}
+
+void Rosbridge::createRosSubscriberOdometry(std::string topic, int channel) {
+    static ros::Subscriber sub = nh_.subscribe<nav_msgs::Odometry>(topic, 1, [=](const nav_msgs::Odometry::ConstPtr& msg) {
+        nav_msg::Odometry odom_msg;
+        odom_msg.positionX = msg->pose.pose.position.x;
+        odom_msg.positionY = msg->pose.pose.position.y;
+        odom_msg.positionZ = msg->pose.pose.position.z;
+
+        tf::Quaternion q(
+        msg->pose.pose.orientation.x,
+        msg->pose.pose.orientation.y,
+        msg->pose.pose.orientation.z,
+        msg->pose.pose.orientation.w);
+        tf::Matrix3x3 m(q);
+        double roll, pitch, yaw;
+        m.getRPY(roll, pitch, yaw);
+        odom_msg.roll = roll;
+        odom_msg.pitch = pitch;
+        odom_msg.yaw = yaw;
+
+        swiftrobot_client.publish<nav_msg::Odometry>(channel, odom_msg);
+    });
+}
 
 int main(int argc, char **argv) {
     ros::init(argc, argv, "swiftrobotm_rosbridge_node");
     ros::NodeHandle nh;
 
-    Rosbridge node(nh);
+    Rosbridge *node;
 
+    if (nh.hasParam("/ip_address")) {
+        std::string device_ip;
+        nh.getParam("/ip_address", device_ip);
+        node = new Rosbridge(nh, device_ip, SWIFTROBOT_PORT);
+    } else {
+        node = new Rosbridge(nh, SWIFTROBOT_PORT);
+    }
     ros::spin();
 
     return 0;
